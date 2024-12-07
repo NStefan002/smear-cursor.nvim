@@ -1,7 +1,6 @@
 local color = require("smear_cursor.color")
 local config = require("smear_cursor.config")
 local draw = require("smear_cursor.draw")
-local round = require("smear_cursor.math").round
 local screen = require("smear_cursor.screen")
 local M = {}
 
@@ -13,8 +12,13 @@ local stiffnesses = { 0, 0, 0, 0 }
 
 local function set_corners(corners, row, col)
 	corners[1] = { row, col }
-	corners[2] = { row, col + 1 }
-	corners[3] = { row + 1, col + 1 }
+	if config.vertical_bar_cursor then
+		corners[2] = { row, col + 1 / 8 }
+		corners[3] = { row + 1, col + 1 / 8 }
+	else
+		corners[2] = { row, col + 1 }
+		corners[3] = { row + 1, col + 1 }
+	end
 	corners[4] = { row + 1, col }
 end
 
@@ -36,6 +40,19 @@ local function update()
 	end
 end
 
+local function get_center(corners)
+	return {
+		(corners[1][1] + corners[2][1] + corners[3][1] + corners[4][1]) / 4,
+		(corners[1][2] + corners[2][2] + corners[3][2] + corners[4][2]) / 4,
+	}
+end
+
+local function normalize(v)
+	local length = math.sqrt(v[1] ^ 2 + v[2] ^ 2)
+	if length == 0 then return { 0, 0 } end
+	return { v[1] / length, v[2] / length }
+end
+
 local function shrink_volume(corners)
 	local edges = {}
 	for i = 1, 3 do
@@ -51,18 +68,22 @@ local function shrink_volume(corners)
 	end
 	local volume = (double_volumes[1] + double_volumes[2]) / 2
 
-	local center = {
-		(corners[1][1] + corners[2][1] + corners[3][1] + corners[4][1]) / 4,
-		(corners[1][2] + corners[2][2] + corners[3][2] + corners[4][2]) / 4,
-	}
-
+	local center = get_center(corners)
 	local factor = (1 / volume) ^ (config.volume_reduction_exponent / 2)
 	factor = math.max(config.minimum_volume_factor, factor)
+
 	local shrunk_corners = {}
 	for i = 1, 4 do
+		-- Only shrink perpendicular to the motion
+		local corner_to_target = { target_corners[i][1] - corners[i][1], target_corners[i][2] - corners[i][2] }
+		local center_to_corner = { corners[i][1] - center[1], corners[i][2] - center[2] }
+		local normal = normalize({ -corner_to_target[2], corner_to_target[1] })
+		local projection = center_to_corner[1] * normal[1] + center_to_corner[2] * normal[2]
+		local shift = projection * (1 - factor)
+
 		shrunk_corners[i] = {
-			center[1] + (corners[i][1] - center[1]) * factor,
-			center[2] + (corners[i][2] - center[2]) * factor,
+			corners[i][1] - normal[1] * shift,
+			corners[i][2] - normal[2] * shift,
 		}
 	end
 
@@ -90,24 +111,26 @@ local function animate()
 	end
 
 	local shrunk_corners = shrink_volume(current_corners)
-	-- stylua: ignore start
-	local target_reached = (
-		math.floor(shrunk_corners[1][1]) == target_position[1] and
-		math.floor(shrunk_corners[1][2]) == target_position[2]
-	) or (
-		math.floor(shrunk_corners[2][1]) == target_position[1] and
-		math.ceil(shrunk_corners[2][2]) - 1 == target_position[2]
-	) or (
-		math.ceil(shrunk_corners[3][1]) - 1 == target_position[1] and
-		math.ceil(shrunk_corners[3][2]) - 1 == target_position[2]
-	) or (
-		math.ceil(shrunk_corners[4][1]) - 1 == target_position[1] and
-		math.floor(shrunk_corners[4][2]) == target_position[2]
-	)
-	-- stylua: ignore end
+	if config.hide_target_hack then
+		-- stylua: ignore
+		local target_reached = (
+			math.floor(shrunk_corners[1][1]) == target_position[1] and
+			math.floor(shrunk_corners[1][2]) == target_position[2]
+		) or (
+			math.floor(shrunk_corners[2][1]) == target_position[1] and
+			math.ceil(shrunk_corners[2][2]) - 1 == target_position[2]
+		) or (
+			math.ceil(shrunk_corners[3][1]) - 1 == target_position[1] and
+			math.ceil(shrunk_corners[3][2]) - 1 == target_position[2]
+		) or (
+			math.ceil(shrunk_corners[4][1]) - 1 == target_position[1] and
+			math.floor(shrunk_corners[4][2]) == target_position[2]
+		)
 
-	if not target_reached and config.hide_target_hack then
-		draw.draw_character(target_position[1], target_position[2], " ", color.get_hl_group({ inverted = true }))
+		if not target_reached then
+			local character = config.vertical_bar_cursor and "▏" or "█"
+			draw.draw_character(target_position[1], target_position[2], character, color.get_hl_group())
+		end
 	end
 
 	draw.draw_quad(shrunk_corners, target_position)
@@ -115,7 +138,7 @@ local function animate()
 end
 
 local function set_stiffnesses(head_stiffness, trailing_stiffness)
-	local target_center = { target_position[1] + 0.5, target_position[2] + 0.5 }
+	local target_center = get_center(target_corners)
 	local distances = {}
 	local min_distance = math.huge
 	local max_distance = 0
@@ -136,9 +159,7 @@ local function set_stiffnesses(head_stiffness, trailing_stiffness)
 end
 
 M.change_target_position = function(row, col, jump)
-	if target_position[1] == row and target_position[2] == col then
-		return
-	end
+	if target_position[1] == row and target_position[2] == col then return end
 	draw.clear()
 
 	-- Draw end of previous smear
@@ -158,9 +179,7 @@ M.change_target_position = function(row, col, jump)
 		return
 	end
 
-	if not animating then
-		animate()
-	end
+	if not animating then animate() end
 end
 
 setmetatable(M, {

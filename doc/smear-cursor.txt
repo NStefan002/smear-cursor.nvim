@@ -1,0 +1,166 @@
+*smear-cursor.txt*     Neovim plugin to animate the cursor with a smear effect
+
+==============================================================================
+Table of Contents                             *smear-cursor-table-of-contents*
+
+1. Installation                                    |smear-cursor-installation|
+  - Minimum requirements      |smear-cursor-installation-minimum-requirements|
+  - Using lazy.nvim                |smear-cursor-installation-using-lazy.nvim|
+  - Using vim-plug                  |smear-cursor-installation-using-vim-plug|
+2. Configuration                                  |smear-cursor-configuration|
+  - Using lazy.nvim               |smear-cursor-configuration-using-lazy.nvim|
+  - Faster smear                     |smear-cursor-configuration-faster-smear|
+  - Transparent background |smear-cursor-configuration-transparent-background|
+  - Using init.vim                 |smear-cursor-configuration-using-init.vim|
+3. Known issues                                    |smear-cursor-known-issues|
+
+==============================================================================
+1. Installation                                    *smear-cursor-installation*
+
+
+  [!NOTE] After enabling the plugin in your configuration, you can toggle the
+  smear cursor on and off with the `:SmearCursorToggle` command or with `:lua
+  require("smear_cursor").toggle()`.
+
+MINIMUM REQUIREMENTS          *smear-cursor-installation-minimum-requirements*
+
+- Neovim 0.10.2
+
+
+USING LAZY.NVIM                    *smear-cursor-installation-using-lazy.nvim*
+
+In `~/.config/nvim/lua/plugins/smear_cursor.lua`, add:
+
+>lua
+    return {
+      "sphamba/smear-cursor.nvim",
+      opts = {},
+    }
+<
+
+
+USING VIM-PLUG                      *smear-cursor-installation-using-vim-plug*
+
+In your `init.vim`, add:
+
+>vim
+    call plug#begin()
+    Plug 'sphamba/smear-cursor.nvim'
+    call plug#end()
+    
+    lua require('smear_cursor').enabled = true
+<
+
+
+==============================================================================
+2. Configuration                                  *smear-cursor-configuration*
+
+
+USING LAZY.NVIM                   *smear-cursor-configuration-using-lazy.nvim*
+
+Here are the default configuration options:
+
+>lua
+    return {
+      "sphamba/smear-cursor.nvim",
+    
+      opts = {
+        -- Smear cursor color. Defaults to Cursor GUI color if not set.
+        -- Set to "none" to match the text color at the target cursor position.
+        cursor_color = "#d3cdc3",
+    
+        -- Background color. Defaults to Normal GUI background color if not set.
+        normal_bg = "#282828",
+    
+        -- Smear cursor when switching buffers or windows.
+        smear_between_buffers = true,
+    
+        -- Smear cursor when moving within line or to neighbor lines.
+        smear_between_neighbor_lines = true,
+    
+        -- Set to `true` if your font supports legacy computing symbols (block unicode symbols).
+        -- Smears will blend better on all backgrounds.
+        legacy_computing_symbols_support = false,
+      },
+    }
+<
+
+Refer to `lua/smear_cursor/config.lua`
+<https://github.com/sphamba/smear-cursor.nvim/blob/main/lua/smear_cursor/config.lua>
+for the full list of configuration options that can be set with `opts`.
+
+
+  [!TIP] Some terminals override the cursor color set by Neovim. If that is the
+  case, manually put the actual cursor color in your config, as shown above, to
+  get a matching smear color.
+
+FASTER SMEAR                         *smear-cursor-configuration-faster-smear*
+
+As an example of further configuration, you can tune the smear dynamics to be
+snappier:
+
+>lua
+      opts = {                         -- Default  Range
+        stiffness = 0.8,               -- 0.6      [0, 1]
+        trailing_stiffness = 0.5,      -- 0.3      [0, 1]
+        distance_stop_animating = 0.5, -- 0.1      > 0
+        hide_target_hack = false,      -- true     boolean
+      },
+<
+
+
+  [!WARNING] **FIRE HAZARD **Feel free to experiment with all the configuration
+  options, but be aware that some combinations may cause your cursor to flicker
+  or even **catch fire**. That can happen with the following settings:
+  >lua
+        opts = {
+          cursor_color = "#ff8800",
+          stiffness = 0.3,
+          trailing_stiffness = 0.1,
+          trailing_exponent = 3,
+          gamma = 1,
+          volume_reduction_exponent = -0.1,
+        }
+  <
+
+TRANSPARENT BACKGROUND     *smear-cursor-configuration-transparent-background*
+
+Drawing the smear over a transparent background works better when using a font
+that supports legacy computing symbols, therefore setting the following option:
+
+>lua
+      opts = {
+        legacy_computing_symbols_support = true,
+      },
+<
+
+If your font does not support legacy computing symbols, there will be a shadow
+under the smear. You may set a color for this shadow to be less noticeable:
+
+>lua
+      opts = {
+        transparent_bg_fallback_color = "#303030",
+      },
+<
+
+
+USING INIT.VIM                     *smear-cursor-configuration-using-init.vim*
+
+You can set the configuration variables in your `init.vim` file like this:
+
+>vim
+    lua require('smear_cursor').setup({
+        \cursor_color = '#d3cdc3',
+    \})
+<
+
+
+==============================================================================
+3. Known issues                                    *smear-cursor-known-issues*
+
+- There is a shadow around the smear (text become invisible). This is inherent to the way the smear is rendered, as Neovim is not able to render superimposed characters. The shadow is less noticeable when the smear is moving faster (see configuration options).
+- Likely not compatible with other plugins that modify the cursor.
+
+Generated by panvimdoc <https://github.com/kdheepak/panvimdoc>
+
+vim:tw=78:ts=8:noet:ft=help:norl:
